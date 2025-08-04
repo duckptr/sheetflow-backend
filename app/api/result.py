@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from upload import latest_result
+from app.api.upload import latest_result  # ✅ 정확한 경로로 import
 
 router = APIRouter()
 
