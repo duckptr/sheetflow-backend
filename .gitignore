@@ -1,1 +1,89 @@
+# =========================
+# Miscellaneous
+# =========================
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# VSCode (주석처리 상태, 필요하면 해제)
+/.vscode/
+
+# =========================
+# Flutter/Dart/Pub related
+# =========================
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio build artifacts
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# =========================
+# Python related
+# =========================
+
+# 최상위 루트 가상환경 무시
 /venv
+
+# 모든 하위 폴더의 venv 폴더 무시
+venv/
+
+__pycache__/
+*.pyo
+*.pyd
+*.pdb
+
+# =========================
+# IDE/에디터 관련
+# =========================
+.vscode/
+.idea/
+*.swp
+
+# =========================
+# OS 관련
+# =========================
+Thumbs.db
+
+# =========================
+# 로그/임시 파일
+# =========================
+*.log
+*.tmp
+
+# =========================
+# SheetFlow 백엔드 특화
+# =========================
+uploaded_files/         # 업로드된 엑셀 저장 폴더
+release-package/        # 배포 패키지 폴더
+dist/                   # PyInstaller 빌드 폴더
+build/                  # 빌드 폴더
+*.spec                  # PyInstaller spec 파일
