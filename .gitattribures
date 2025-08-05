@@ -1,0 +1,5 @@
+release-package/** linguist-vendored
+uploaded_files/** linguist-vendored
+build/** linguist-vendored
+dist/** linguist-vendored
+*.html linguist-generated
