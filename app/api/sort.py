@@ -2,60 +2,53 @@ from fastapi import APIRouter, UploadFile, File
 from fastapi.responses import JSONResponse
 import pandas as pd
 from io import BytesIO
+from app.utils.cleaner import clean_dataframe
+from app.utils.formatter import format_numbers_preview
 
 router = APIRouter()
-
-# 사용자 컬럼 → 내부 분석용 컬럼 매핑
-COLUMN_MAPPING = {
-    "codes": "제품코드",
-    "testdate": "준비일",
-    "shipdate": "출하일",
-    "serialst": "시작시리얼",
-    "serialsp": "종료시리얼",
-}
 
 @router.post("/sort_excel")
 async def sort_excel(file: UploadFile = File(...)):
     try:
         contents = await file.read()
-        df = pd.read_excel(BytesIO(contents))
+        allowed_columns = [
+            "package", "partno", "codes", "lotno", "dcode", "Testdate", "shipdate",
+            "boxno", "serialst", "serialsp", "inqty", "currqty", "testedqty", "goodqty", "yld"
+        ]
+        df = pd.read_excel(BytesIO(contents), usecols=lambda name: name in allowed_columns)
 
-        # 원본 컬럼 소문자화
-        df.columns = [col.lower() for col in df.columns]
+        original_columns = df.columns.tolist()
 
-        # 매핑 적용
-        df = df.rename(columns={k: v for k, v in COLUMN_MAPPING.items() if k in df.columns})
+        df_lower = df.copy()
+        df_lower.columns = [col.lower() for col in df_lower.columns]
+        rename_map = {
+            "testdate": "Testdate",
+            "shipdate": "shipdate",
+            "codes": "codes",
+            "serialst": "serialst",
+            "serialsp": "serialsp"
+        }
+        df_lower = df_lower.rename(columns={col: rename_map.get(col, col) for col in df_lower.columns})
 
-        # 날짜 컬럼 처리
-        for date_col in ["준비일", "출하일"]:
-            if date_col in df.columns:
-                df[date_col] = pd.to_datetime(df[date_col], errors="coerce")
-            else:
-                df[date_col] = pd.NaT
+        for date_col in ["Testdate", "shipdate"]:
+            if date_col in df_lower.columns:
+                df_lower[date_col] = pd.to_datetime(df_lower[date_col], errors="coerce")
 
-        # 시리얼 없는 행도 포함 → 대신 뒤로 가게 설정
-        df_sorted = df.sort_values(
-            by=["제품코드", "준비일", "출하일", "시작시리얼", "종료시리얼"],
-            ascending=[True, True, True, True, True],
-            na_position="last"
-        )
+        sort_keys = [col for col in ["codes", "lotno", "Testdate", "shipdate", "serialst"] if col in df_lower.columns]
+        df_sorted = df_lower.sort_values(by=sort_keys, ascending=True, na_position="last") if sort_keys else df_lower
 
-        # JSON 변환
-        rows = []
-        for _, row in df_sorted.iterrows():
-            rows.append({
-                "제품코드": row.get("제품코드"),
-                "준비일": row["준비일"].strftime("%Y-%m-%d") if pd.notnull(row["준비일"]) else None,
-                "출하일": row["출하일"].strftime("%Y-%m-%d") if pd.notnull(row["출하일"]) else None,
-                "시작시리얼": str(row["시작시리얼"]).strip() if pd.notnull(row["시작시리얼"]) else None,
-                "종료시리얼": str(row["종료시리얼"]).strip() if pd.notnull(row["종료시리얼"]) else None,
-            })
+        df_sorted = df_sorted[[col for col in original_columns if col in df_sorted.columns]]
+        df_sorted = clean_dataframe(df_sorted)
 
-        # 미리보기 50행만 반환
-        return {"sorted_preview": rows[:50]}
+        for date_col in ["Testdate", "shipdate"]:
+            if date_col in df_sorted.columns:
+                df_sorted[date_col] = df_sorted[date_col].apply(
+                    lambda x: x.strftime("%Y-%m-%d") if pd.notnull(x) and hasattr(x, "strftime") else x
+                )
+
+        rows = [format_numbers_preview(r) for r in df_sorted.head(50).to_dict(orient="records")]
+        return {"sorted_preview": rows}
 
     except Exception as e:
-        import traceback
         print("❌ sort_excel 오류:", e)
-        print(traceback.format_exc())
         return JSONResponse(status_code=500, content={"error": str(e)})
