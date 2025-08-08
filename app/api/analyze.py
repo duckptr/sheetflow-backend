@@ -1,9 +1,8 @@
-from fastapi import APIRouter, UploadFile, File, Form, Body
-from fastapi.responses import StreamingResponse, JSONResponse
+
+from fastapi import APIRouter, UploadFile, File, Body
+from fastapi.responses import JSONResponse
 import pandas as pd
-from io import BytesIO, StringIO
-from datetime import datetime
-from app.utils.formatter import apply_excel_formats
+from io import BytesIO
 
 router = APIRouter()
 
@@ -32,11 +31,10 @@ def detect_duplicates(df: pd.DataFrame) -> pd.DataFrame:
                 duplicates.append(group.iloc[i + 1])
     return pd.DataFrame(duplicates).drop_duplicates() if duplicates else pd.DataFrame(columns=df.columns)
 
-@router.post("/generate_excel")
-async def generate_excel(
+@router.post("/analyze_excel")
+async def analyze_excel(
     file: UploadFile = File(...),
-    format: str = Form("xlsx"),  # "csv" or "xlsx"
-    filters: dict = Body(default={})  # JSON으로 조건 받음
+    filters: dict = Body(default={})
 ):
     try:
         contents = await file.read()
@@ -46,12 +44,11 @@ async def generate_excel(
         df.columns = [col.strip().lower() for col in df.columns]
         df = df.rename(columns={col: COLUMN_MAPPING.get(col, col) for col in df.columns})
 
-        # 날짜 포맷 통일
         for date_col in ["Testdate", "shipdate"]:
             if date_col in df.columns:
                 df[date_col] = pd.to_datetime(df[date_col], errors="coerce").dt.strftime("%Y-%m-%d")
 
-        # ✅ 임시 조건 필터 적용
+        # 필터 적용
         df_filtered = df.copy()
         if "codes" in filters:
             df_filtered = df_filtered[df_filtered["codes"].isin(filters["codes"])]
@@ -70,32 +67,18 @@ async def generate_excel(
         # 중복 체크
         df_duplicates = detect_duplicates(df_sorted)
 
-        # 저장
-        if format == "csv":
-            output = StringIO()
-            df_sorted.to_csv(output, index=False, encoding="utf-8-sig")
-            output.seek(0)
-            filename = f"sheetflow_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
-            media_type = "text/csv"
-        else:
-            output = BytesIO()
-            with pd.ExcelWriter(output, engine="xlsxwriter") as writer:
-                df_sorted.to_excel(writer, index=False, sheet_name="SortedData")
-                if not df_duplicates.empty:
-                    df_duplicates.to_excel(writer, index=False, sheet_name="Duplicates")
-                apply_excel_formats(writer, df_sorted)
-            output.seek(0)
-            filename = f"sheetflow_{datetime.now().strftime('%Y%m%d_%H%M%S')}.xlsx"
-            media_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        # 통계 생성
+        stats = {
+            "total_rows": len(df_filtered),
+            "duplicate_rows": len(df_duplicates),
+            "applied_filters": filters,
+            "sort_keys": sort_keys
+        }
 
-        return StreamingResponse(
-            output,
-            media_type=media_type,
-            headers={"Content-Disposition": f"attachment; filename={filename}"}
-        )
+        return JSONResponse(content={"status": "success", "stats": stats})
 
     except Exception as e:
         import traceback
-        print("❌ generate_excel 오류:", e)
+        print("❌ analyze_excel 오류:", e)
         print(traceback.format_exc())
         return JSONResponse(status_code=500, content={"error": str(e)})
